@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 const Camera = ({ className }) => (
@@ -61,14 +61,16 @@ export default function Home() {
   });
 
   useEffect(() => {
-    const savedId = localStorage.getItem('ledger_sheet_id');
-    if (savedId) {
-      setSheetId(savedId);
+    if (typeof window !== 'undefined') {
+      const savedId = localStorage.getItem('ledger_sheet_id');
+      if (savedId) {
+        setSheetId(savedId);
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (connected) {
+    if (connected && sheetId) {
       const interval = setInterval(() => {
         fetchData();
       }, 30000);
@@ -92,7 +94,10 @@ export default function Home() {
         throw new Error('Invalid Google Sheets ID or URL');
       }
 
-      localStorage.setItem('ledger_sheet_id', id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ledger_sheet_id', id);
+      }
+      
       await fetchData(id);
       setConnected(true);
       
@@ -113,7 +118,7 @@ export default function Home() {
       );
       
       if (!balanceResponse.ok) {
-        throw new Error('Could not access sheet. Make sure it is publicly accessible.');
+        throw new Error('Could not access sheet');
       }
 
       const balanceText = await balanceResponse.text();
@@ -148,8 +153,7 @@ export default function Home() {
       setError('');
       
     } catch (err) {
-      console.error('Fetch error:', err);
-      setError('Failed to fetch data. Check sheet permissions and try again.');
+      setError('Failed to fetch data');
     }
   };
 
@@ -157,7 +161,9 @@ export default function Home() {
     setConnected(false);
     setSheetId('');
     setBalanceSheet([]);
-    localStorage.removeItem('ledger_sheet_id');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ledger_sheet_id');
+    }
   };
 
   const filteredData = balanceSheet.filter(item => {
@@ -182,8 +188,7 @@ export default function Home() {
     return (
       <>
         <Head>
-          <title>Ledger Web App - Connect</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Ledger Web App</title>
         </Head>
         
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -193,7 +198,7 @@ export default function Home() {
                 <Camera className="w-10 h-10 text-white" />
               </div>
               <h1 className="text-4xl font-bold text-gray-800 mb-2">Ledger Web App</h1>
-              <p className="text-gray-600">Connect to your Google Sheets ledger for live updates</p>
+              <p className="text-gray-600">Connect to your Google Sheets ledger</p>
             </div>
 
             {error && (
@@ -214,18 +219,15 @@ export default function Home() {
                   type="text"
                   value={sheetId}
                   onChange={(e) => setSheetId(e.target.value)}
-                  placeholder="Paste full URL or sheet ID here"
+                  placeholder="Paste your sheet URL here"
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <p className="mt-2 text-xs text-gray-500">
-                  Example: https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit
-                </p>
               </div>
 
               <button
                 onClick={connectToSheet}
                 disabled={!sheetId || loading}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center"
               >
                 {loading ? (
                   <>
@@ -239,22 +241,15 @@ export default function Home() {
             </div>
 
             <div className="mt-8 p-6 bg-blue-50 rounded-lg">
-              <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
-                <AlertCircle className="w-5 h-5 mr-2 text-blue-500" />
-                Setup Requirements
-              </h3>
+              <h3 className="font-semibold text-gray-800 mb-3">Requirements</h3>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li className="flex items-start">
-                  <CheckCircle className="w-4 h-4 mr-2 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Sheet must be <strong>publicly accessible</strong> (Anyone with link can view)</span>
+                  <CheckCircle className="w-4 h-4 mr-2 text-green-500 mt-0.5" />
+                  <span>Sheet must be publicly accessible</span>
                 </li>
                 <li className="flex items-start">
-                  <CheckCircle className="w-4 h-4 mr-2 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Must have "Balance Sheet" tab with columns: Name, Balance, DR/CR, Link</span>
-                </li>
-                <li className="flex items-start">
-                  <CheckCircle className="w-4 h-4 mr-2 text-green-500 mt-0.5 flex-shrink-0" />
-                  <span>Data updates automatically every 30 seconds</span>
+                  <CheckCircle className="w-4 h-4 mr-2 text-green-500 mt-0.5" />
+                  <span>Must have Balance Sheet tab</span>
                 </li>
               </ul>
             </div>
@@ -268,7 +263,6 @@ export default function Home() {
     <>
       <Head>
         <title>Ledger Dashboard</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <div className="min-h-screen bg-gray-50">
@@ -279,14 +273,14 @@ export default function Home() {
                 <Camera className="w-8 h-8" />
                 <div>
                   <h1 className="text-2xl font-bold">Ledger Dashboard</h1>
-                  <p className="text-sm text-blue-100">Live from Google Sheets</p>
+                  <p className="text-sm text-blue-100">Live Data</p>
                 </div>
               </div>
               
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => fetchData()}
-                  className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Refresh
@@ -294,7 +288,7 @@ export default function Home() {
                 
                 <button
                   onClick={disconnect}
-                  className="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                  className="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg"
                 >
                   Disconnect
                 </button>
@@ -308,8 +302,8 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow-md p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Total Customers</p>
-                  <p className="text-3xl font-bold text-gray-800">{stats.totalCustomers}</p>
+                  <p className="text-sm text-gray-600">Customers</p>
+                  <p className="text-3xl font-bold">{stats.totalCustomers}</p>
                 </div>
                 <Users className="w-12 h-12 text-blue-500" />
               </div>
@@ -339,9 +333,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Net Position</p>
-                  <p className={`text-2xl font-bold ${stats.netPosition >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                    {formatCurrency(Math.abs(stats.netPosition))}
-                  </p>
+                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(Math.abs(stats.netPosition))}</p>
                 </div>
                 <TrendingUp className="w-12 h-12 text-blue-500" />
               </div>
@@ -349,7 +341,7 @@ export default function Home() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex gap-4">
               <div className="flex-1 relative">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
@@ -357,31 +349,31 @@ export default function Home() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search customers..."
-                  className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg"
                 />
               </div>
 
               <div className="flex gap-2">
                 <button
                   onClick={() => setFilterType('all')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    filterType === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    filterType === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200'
                   }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setFilterType('dr')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    filterType === 'dr' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    filterType === 'dr' ? 'bg-red-500 text-white' : 'bg-gray-200'
                   }`}
                 >
                   DR
                 </button>
                 <button
                   onClick={() => setFilterType('cr')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    filterType === 'cr' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  className={`px-4 py-2 rounded-lg font-medium ${
+                    filterType === 'cr' ? 'bg-green-500 text-white' : 'bg-gray-200'
                   }`}
                 >
                   CR
@@ -391,82 +383,42 @@ export default function Home() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center justify-between">
+            <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between">
               <h2 className="text-xl font-bold">Balance Sheet</h2>
               {lastUpdate && (
-                <p className="text-sm text-blue-100">
-                  Last updated: {lastUpdate.toLocaleTimeString()}
-                </p>
+                <p className="text-sm">Updated: {lastUpdate.toLocaleTimeString()}</p>
               )}
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-100 border-b-2 border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Customer Name
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Balance (PKR)
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      DR/CR
-                    </th>
+            <table className="w-full">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Customer</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Balance</th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">DR/CR</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredData.map((customer, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium">{customer.name}</td>
+                    <td className="px-6 py-4 text-right font-semibold">{formatCurrency(Math.abs(customer.balance))}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        customer.drCr === 'DR' ? 'bg-red-100 text-red-700' :
+                        customer.drCr === 'CR' ? 'bg-green-100 text-green-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {customer.drCr}
+                      </span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredData.map((customer, index) => (
-                    <tr key={index} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="font-medium text-gray-900">{customer.name}</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="font-semibold text-gray-900">
-                          {formatCurrency(Math.abs(customer.balance))}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${
-                          customer.drCr === 'DR' 
-                            ? 'bg-red-100 text-red-700' 
-                            : customer.drCr === 'CR'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {customer.drCr}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {filteredData.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">No customers found.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 text-center text-sm text-gray-500">
-            <p>Data syncs automatically every 30 seconds</p>
-            <p className="mt-1">Showing {filteredData.length} of {balanceSheet.length} customers</p>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </>
   );
 }
-```
-
----
-
-# 📁 **PROJECT STRUCTURE**
-```
-ledger-webapp/
-├── package.json          ← FILE 1
-├── next.config.js        ← FILE 2
-└── pages/
-    └── index.js          ← FILE 3
