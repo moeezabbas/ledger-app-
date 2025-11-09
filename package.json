@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint",
+    "clean": "rm -rf .next node_modules package-lock.json && npm install",
+    "clean-install": "npm run clean && npm install && npm run build"
   },
   "dependencies": {
     "next": "14.0.4",
@@ -16,14 +19,5 @@
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6"
-  }
-}
-{
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "clean": "rm -rf .next node_modules package-lock.json && npm install"
   }
 }
