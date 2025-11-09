@@ -83,79 +83,110 @@ export default function Home() {
     return match ? match[1] : input;
   };
 
-  const connectToSheet = async () => {
+  // Add this validation function near the top of your component
+const validateSheetId = (id) => {
+  const cleanId = id.trim();
+  return /^[a-zA-Z0-9-_]{20,}$/.test(cleanId);
+};
+
+// Replace the existing connectToSheet function with this:
+const connectToSheet = async () => {
+  setLoading(true);
+  setError('');
+  
+  try {
+    const id = extractSheetId(sheetId);
+    
+    // Add validation
+    if (!id || !validateSheetId(id)) {
+      throw new Error('https://docs.google.com/spreadsheets/d/1F1X-2FVVUKQUs4HSsGpgb1Qqk7-zieKtd_E29teQ7x0/edit?usp=sharing');
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ledger_sheet_id', id);
+    }
+    
+    await fetchData(id);
+    setConnected(true);
+    
+  } catch (err) {
+    setError(err.message || 'Failed to connect to Google Sheets');
+    setConnected(false);
+  } finally {
+    setLoading(false);
+  }
+};
+
+ const fetchData = async (id = sheetId) => {
+  try {
     setLoading(true);
+    const extractedId = extractSheetId(id);
+    
+    const response = await fetch(
+      `https://docs.google.com/spreadsheets/d/${extractedId}/gviz/tq?tqx=out:json&sheet=Balance%20Sheet`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Sheet not accessible - check if it\'s publicly shared');
+    }
+    
+    const text = await response.text();
+    
+    // Validate response format
+    if (!text.includes('google.visualization.Query.setResponse')) {
+      throw new Error('Invalid sheet format - make sure it contains Balance Sheet data');
+    }
+    
+    const json = JSON.parse(text.substring(47).slice(0, -2));
+    
+    // Validate sheet structure
+    if (!json.table || !json.table.rows) {
+      throw new Error('Invalid sheet structure');
+    }
+    
+    const rows = json.table.rows.slice(2); // Skip header rows
+    const balanceData = rows.map(row => ({
+      name: row.c[0]?.v || '',
+      balance: parseFloat(row.c[1]?.v || 0),
+      drCr: row.c[2]?.v || '',
+      link: row.c[3]?.v || ''
+    })).filter(item => item.name);
+
+    // Validate we have data
+    if (balanceData.length === 0) {
+      throw new Error('No customer data found in sheet');
+    }
+
+    setBalanceSheet(balanceData);
+    
+    const totalDR = balanceData
+      .filter(item => item.drCr === 'DR')
+      .reduce((sum, item) => sum + Math.abs(item.balance), 0);
+    
+    const totalCR = balanceData
+      .filter(item => item.drCr === 'CR')
+      .reduce((sum, item) => sum + Math.abs(item.balance), 0);
+    
+    setStats({
+      totalCustomers: balanceData.length,
+      totalDR,
+      totalCR,
+      netPosition: totalDR - totalCR
+    });
+
+    setLastUpdate(new Date());
     setError('');
     
-    try {
-      const id = extractSheetId(sheetId);
-      
-      if (!id || id.length < 20) {
-        throw new Error('Invalid Google Sheets ID or URL');
-      }
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('ledger_sheet_id', id);
-      }
-      
-      await fetchData(id);
-      setConnected(true);
-      
-    } catch (err) {
-      setError(err.message || 'Failed to connect to Google Sheets');
-      setConnected(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchData = async (id = sheetId) => {
-    try {
-      const extractedId = extractSheetId(id);
-      
-      const balanceResponse = await fetch(
-        `https://docs.google.com/spreadsheets/d/${extractedId}/gviz/tq?tqx=out:json&sheet=Balance%20Sheet`
-      );
-      
-      if (!balanceResponse.ok) {
-        throw new Error('Could not access sheet');
-      }
-
-      const balanceText = await balanceResponse.text();
-      const balanceJson = JSON.parse(balanceText.substring(47).slice(0, -2));
-      
-      const rows = balanceJson.table.rows.slice(2);
-      const balanceData = rows.map(row => ({
-        name: row.c[0]?.v || '',
-        balance: parseFloat(row.c[1]?.v || 0),
-        drCr: row.c[2]?.v || '',
-        link: row.c[3]?.v || ''
-      })).filter(item => item.name);
-
-      setBalanceSheet(balanceData);
-      
-      const totalDR = balanceData
-        .filter(item => item.drCr === 'DR')
-        .reduce((sum, item) => sum + Math.abs(item.balance), 0);
-      
-      const totalCR = balanceData
-        .filter(item => item.drCr === 'CR')
-        .reduce((sum, item) => sum + Math.abs(item.balance), 0);
-      
-      setStats({
-        totalCustomers: balanceData.length,
-        totalDR,
-        totalCR,
-        netPosition: totalDR - totalCR
-      });
-
-      setLastUpdate(new Date());
-      setError('');
-      
-    } catch (err) {
-      setError('Failed to fetch data');
-    }
-  };
+  } catch (err) {
+    setError(err.message === 'Failed to fetch' 
+      ? 'Network error - please check your internet connection'
+      : err.message
+    );
+    console.error('Fetch error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const disconnect = () => {
     setConnected(false);
@@ -383,42 +414,55 @@ export default function Home() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between">
-              <h2 className="text-xl font-bold">Balance Sheet</h2>
-              {lastUpdate && (
-                <p className="text-sm">Updated: {lastUpdate.toLocaleTimeString()}</p>
-              )}
-            </div>
+  <div className="p-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex justify-between">
+    <h2 className="text-xl font-bold">Balance Sheet</h2>
+    {lastUpdate && (
+      <p className="text-sm">Updated: {lastUpdate.toLocaleTimeString()}</p>
+    )}
+  </div>
 
-            <table className="w-full">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Customer</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Balance</th>
-                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">DR/CR</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredData.map((customer, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium">{customer.name}</td>
-                    <td className="px-6 py-4 text-right font-semibold">{formatCurrency(Math.abs(customer.balance))}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        customer.drCr === 'DR' ? 'bg-red-100 text-red-700' :
-                        customer.drCr === 'CR' ? 'bg-green-100 text-green-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {customer.drCr}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
+  {loading ? (
+    <div className="p-8 text-center">
+      <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
+      <p className="text-gray-600">Loading balance sheet data...</p>
+    </div>
+  ) : filteredData.length === 0 ? (
+    <div className="p-8 text-center">
+      <Search className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+      <p className="text-gray-500 text-lg mb-2">No customers found</p>
+      <p className="text-gray-400 text-sm">
+        {searchTerm || filterType !== 'all' 
+          ? 'Try adjusting your search or filter criteria'
+          : 'No customer data available in the sheet'
+        }
+      </p>
+    </div>
+  ) : (
+    <table className="w-full">
+      <thead className="bg-gray-100">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Customer</th>
+          <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Balance</th>
+          <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">DR/CR</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y">
+        {filteredData.map((customer, index) => (
+          <tr key={index} className="hover:bg-gray-50">
+            <td className="px-6 py-4 font-medium">{customer.name}</td>
+            <td className="px-6 py-4 text-right font-semibold">{formatCurrency(Math.abs(customer.balance))}</td>
+            <td className="px-6 py-4 text-center">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                customer.drCr === 'DR' ? 'bg-red-100 text-red-700' :
+                customer.drCr === 'CR' ? 'bg-green-100 text-green-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {customer.drCr}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+</div>
