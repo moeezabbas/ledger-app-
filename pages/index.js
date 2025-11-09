@@ -117,34 +117,24 @@ const connectToSheet = async () => {
   }
 };
 
- const fetchData = async (id = sheetId) => {
+const fetchData = async (id = sheetId) => {
   try {
     setLoading(true);
     const extractedId = extractSheetId(id);
     
-    const response = await fetch(
-      `https://docs.google.com/spreadsheets/d/${extractedId}/gviz/tq?tqx=out:json&sheet=Balance%20Sheet`
-    );
+    // Use API route instead of direct fetch
+    const response = await fetch(`/api/sheet-data?sheetId=${extractedId}`);
+    const result = await response.json();
     
     if (!response.ok) {
-      throw new Error('Sheet not accessible - check if it\'s publicly shared');
+      throw new Error(result.error || 'Failed to fetch data');
     }
     
-    const text = await response.text();
+    // Parse the data from API response
+    const json = JSON.parse(result.data.substring(47).slice(0, -2));
     
-    // Validate response format
-    if (!text.includes('google.visualization.Query.setResponse')) {
-      throw new Error('Invalid sheet format - make sure it contains Balance Sheet data');
-    }
-    
-    const json = JSON.parse(text.substring(47).slice(0, -2));
-    
-    // Validate sheet structure
-    if (!json.table || !json.table.rows) {
-      throw new Error('Invalid sheet structure');
-    }
-    
-    const rows = json.table.rows.slice(2); // Skip header rows
+    // ... rest of your existing data processing code
+    const rows = json.table.rows.slice(2);
     const balanceData = rows.map(row => ({
       name: row.c[0]?.v || '',
       balance: parseFloat(row.c[1]?.v || 0),
@@ -152,13 +142,9 @@ const connectToSheet = async () => {
       link: row.c[3]?.v || ''
     })).filter(item => item.name);
 
-    // Validate we have data
-    if (balanceData.length === 0) {
-      throw new Error('No customer data found in sheet');
-    }
-
     setBalanceSheet(balanceData);
     
+    // ... rest of your stats calculation
     const totalDR = balanceData
       .filter(item => item.drCr === 'DR')
       .reduce((sum, item) => sum + Math.abs(item.balance), 0);
@@ -178,11 +164,7 @@ const connectToSheet = async () => {
     setError('');
     
   } catch (err) {
-    setError(err.message === 'Failed to fetch' 
-      ? 'Network error - please check your internet connection'
-      : err.message
-    );
-    console.error('Fetch error:', err);
+    setError(err.message);
   } finally {
     setLoading(false);
   }
